@@ -1,0 +1,48 @@
+project:
+  name: qcnn_uc_project
+  seed: 42
+  log_level: INFO
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  results_dir: data/results
+  logs_dir: logs
+
+uc:
+  # First working cases. Synthetic cases are guaranteed to run without external IEEE files.
+  # Later: set case_name: ieee118_pandapower if pandapower is installed.
+  case_name: synthetic_10
+  case_source: synthetic       # synthetic | pandapower
+  n_generators: 10             # used for synthetic cases
+  n_buses: 5                   # used for synthetic cases
+  time_horizon: 12             # 12 or 24 recommended for first runs
+  base_mva: 100.0
+
+  # UC constraints
+  enable_network_constraints: false
+  enable_reserve: true
+  reserve_margin: 0.10
+  enable_min_up_down: true
+  enable_ramping: true
+  cost_model: linear           # linear in v1. Keep quadratic costs for future MIQP/linearization.
+
+  # Scenario generation
+  n_scenarios: 20
+  demand_scale_low: 0.85
+  demand_scale_high: 1.15
+  bus_load_noise_std: 0.03
+  daily_profile: [0.72, 0.68, 0.65, 0.64, 0.67, 0.76, 0.88, 0.96, 1.02, 1.05, 1.08, 1.10,
+                  1.08, 1.05, 1.02, 1.03, 1.08, 1.16, 1.22, 1.18, 1.08, 0.95, 0.84, 0.76]
+
+solver:
+  name: gurobi              # gurobi | appsi_highs | cbc | glpk
+  tee: false
+  time_limit_sec: 120
+  mip_gap: 0.001
+  threads: 0                # 0 means solver default when supported
+
+outputs:
+  dataset_name: uc_synthetic10_12h_v1
+  overwrite: true
+  save_model_lp: false
