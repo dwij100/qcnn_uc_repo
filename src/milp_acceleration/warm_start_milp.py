@@ -1,7 +1,15 @@
-"""Stage 6 placeholder: MILP warm-start using predicted commitment schedules."""
-
 from __future__ import annotations
 
+import numpy as np
 
-def solve_with_warm_start(*args, **kwargs):
-    raise NotImplementedError("Warm-start MILP acceleration will be implemented in Stage 6.")
+
+def probabilities_to_commitment(probs: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+    return (np.asarray(probs) >= threshold).astype(int)
+
+
+def confidence_matrix(probs: np.ndarray) -> np.ndarray:
+    return np.abs(np.asarray(probs, dtype=float) - 0.5) * 2.0
+
+
+def full_warm_start_from_probs(probs: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+    return probabilities_to_commitment(probs, threshold)

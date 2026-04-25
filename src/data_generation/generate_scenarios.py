@@ -1,75 +1,81 @@
-"""Scenario generation for UC dataset creation."""
-
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List
+from typing import Dict, List
 
 import numpy as np
+import pandas as pd
 
-from src.data_generation.load_ieee_case import SystemData
-
-
-@dataclass(frozen=True)
-class ScenarioData:
-    scenario_id: int
-    demand_mw: np.ndarray  # shape [n_buses, time_horizon]
-    total_demand_mw: np.ndarray  # shape [time_horizon]
-    seed: int
+from src.data_generation.case_factory import UCCase
 
 
-def _daily_profile(time_horizon: int, profile_24h: List[float]) -> np.ndarray:
-    profile = np.asarray(profile_24h, dtype=float)
-    if len(profile) != 24:
-        raise ValueError("daily_profile must contain 24 hourly values")
-    if time_horizon == 24:
-        return profile
-    if time_horizon < 24:
-        return profile[:time_horizon]
-    # Repeat if a longer horizon is requested.
-    reps = int(np.ceil(time_horizon / 24))
-    return np.tile(profile, reps)[:time_horizon]
+def solar_shape(time_horizon: int) -> np.ndarray:
+    h = np.arange(time_horizon)
+    curve = np.maximum(0.0, np.sin(np.pi * (h - 6) / 12))
+    return curve / max(curve.max(), 1e-9)
 
 
-def generate_uc_scenarios(system: SystemData, cfg: dict) -> List[ScenarioData]:
-    """Generate demand scenarios around the system base-load profile."""
-    uc_cfg = cfg["uc"]
-    seed = int(cfg["project"]["seed"])
+def wind_shape(time_horizon: int, rng: np.random.Generator) -> np.ndarray:
+    base = 0.45 + 0.12 * np.sin(2 * np.pi * (np.arange(time_horizon) + 4) / time_horizon)
+    noise = rng.normal(0, 0.05, size=time_horizon)
+    return np.clip(base + noise, 0.05, 0.95)
+
+
+def generate_scenarios(
+    case: UCCase,
+    n_scenarios: int,
+    seed: int,
+    demand_noise_std: float = 0.08,
+    demand_scale_low: float = 0.90,
+    demand_scale_high: float = 1.12,
+    include_renewables: bool = True,
+    renewable_penetration: float = 0.15,
+) -> pd.DataFrame:
+    """Generate scenario features.
+
+    Features contain gross demand, renewable production, and net demand. The UC
+    solver uses net demand. Both gross and renewable values are saved to allow
+    ML models to learn uncertainty patterns.
+    """
     rng = np.random.default_rng(seed)
+    rows: List[Dict[str, float | int | str]] = []
+    T = case.time_horizon
 
-    n_scenarios = int(uc_cfg["n_scenarios"])
-    time_horizon = int(uc_cfg["time_horizon"])
-    scale_low = float(uc_cfg["demand_scale_low"])
-    scale_high = float(uc_cfg["demand_scale_high"])
-    noise_std = float(uc_cfg["bus_load_noise_std"])
-    profile = _daily_profile(time_horizon, uc_cfg["daily_profile"])
+    for sid in range(n_scenarios):
+        scale = rng.uniform(demand_scale_low, demand_scale_high)
+        correlated_noise = rng.normal(0.0, demand_noise_std, size=T)
+        # Smooth the random profile to avoid unrealistic hour-to-hour jumps.
+        correlated_noise = 0.60 * correlated_noise + 0.25 * np.roll(correlated_noise, 1) + 0.15 * np.roll(correlated_noise, -1)
+        gross_demand = case.base_demand * scale * np.clip(1.0 + correlated_noise, 0.75, 1.30)
 
-    base_load = np.asarray([b.base_load_mw for b in system.buses], dtype=float)
-    if np.allclose(base_load.sum(), 0.0):
-        # Some power-flow cases may have missing static loads; create a small
-        # artificial load so the UC problem is not empty.
-        base_load = np.ones(system.n_buses) * (0.5 * sum(g.p_max_mw for g in system.generators) / system.n_buses)
+        if include_renewables and renewable_penetration > 0:
+            solar = solar_shape(T) * renewable_penetration * gross_demand.max() * rng.uniform(0.65, 1.15)
+            wind = wind_shape(T, rng) * 0.35 * renewable_penetration * gross_demand.max() * rng.uniform(0.70, 1.20)
+            renewable = solar + wind
+        else:
+            solar = np.zeros(T)
+            wind = np.zeros(T)
+            renewable = np.zeros(T)
 
-    scenarios: List[ScenarioData] = []
-    for s in range(n_scenarios):
-        scenario_seed = int(rng.integers(0, 2**31 - 1))
-        srng = np.random.default_rng(scenario_seed)
+        net_demand = np.maximum(gross_demand - renewable, 0.10 * gross_demand)
 
-        global_scale = srng.uniform(scale_low, scale_high)
-        demand = np.zeros((system.n_buses, time_horizon), dtype=float)
+        row: Dict[str, float | int | str] = {
+            "scenario_id": sid,
+            "case_name": case.name,
+            "num_generators": case.num_generators,
+            "time_horizon": T,
+            "reserve_margin": case.reserve_margin,
+            "total_capacity": case.total_capacity,
+        }
+        for t in range(T):
+            row[f"demand_t{t}"] = float(gross_demand[t])
+            row[f"renewable_t{t}"] = float(renewable[t])
+            row[f"net_demand_t{t}"] = float(net_demand[t])
+            row[f"solar_t{t}"] = float(solar[t])
+            row[f"wind_t{t}"] = float(wind[t])
+        rows.append(row)
 
-        for t in range(time_horizon):
-            bus_noise = srng.normal(loc=1.0, scale=noise_std, size=system.n_buses)
-            bus_noise = np.clip(bus_noise, 0.70, 1.30)
-            demand[:, t] = base_load * profile[t] * global_scale * bus_noise
+    return pd.DataFrame(rows)
 
-        scenarios.append(
-            ScenarioData(
-                scenario_id=s,
-                demand_mw=demand,
-                total_demand_mw=demand.sum(axis=0),
-                seed=scenario_seed,
-            )
-        )
 
-    return scenarios
+def extract_net_demand(feature_row: pd.Series, time_horizon: int) -> np.ndarray:
+    return np.array([feature_row[f"net_demand_t{t}"] for t in range(time_horizon)], dtype=float)

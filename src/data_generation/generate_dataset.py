@@ -1,191 +1,113 @@
-"""End-to-end UC MILP dataset generation."""
-
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
-from src.data_generation.generate_scenarios import ScenarioData, generate_uc_scenarios
-from src.data_generation.load_ieee_case import SystemData, load_system
-from src.data_generation.uc_milp_model import UCSolveResult, solve_uc_instance
-from src.utils.seed import set_global_seed
-
-LOGGER = logging.getLogger(__name__)
-
-
-def _resolve_path(project_root: Path, path_like: str) -> Path:
-    path = Path(path_like)
-    return path if path.is_absolute() else project_root / path
+from src.data_generation.case_factory import create_uc_case
+from src.data_generation.generate_scenarios import extract_net_demand, generate_scenarios
+from src.data_generation.uc_milp_model import commitment_to_row, dispatch_to_row, solve_uc_milp
+from src.utils.config_loader import ensure_dir, project_path
+from src.utils.logger import get_logger
+from src.utils.seed import set_seed
 
 
-def _write_system_tables(system: SystemData, output_dir: Path) -> None:
-    """Save bus, generator, and branch parameters for reproducibility."""
-    pd.DataFrame([b.__dict__ for b in system.buses]).to_csv(output_dir / "system_buses.csv", index=False)
-    pd.DataFrame([g.__dict__ for g in system.generators]).to_csv(output_dir / "system_generators.csv", index=False)
-    pd.DataFrame([br.__dict__ for br in system.branches]).to_csv(output_dir / "system_branches.csv", index=False)
+def generate_uc_dataset(cfg: Dict[str, Any], case_name: str | None = None, n_scenarios: int | None = None) -> Path:
+    """Generate MILP-labelled UC data and save CSV files.
 
-    with (output_dir / "system_notes.txt").open("w", encoding="utf-8") as f:
-        f.write(f"System name: {system.name}\n")
-        f.write(f"Base MVA: {system.base_mva}\n")
-        f.write(f"Buses: {system.n_buses}\n")
-        f.write(f"Generators: {system.n_generators}\n")
-        f.write(f"Branches: {len(system.branches)}\n")
-        f.write(f"Notes: {system.notes}\n")
-
-
-def _scenario_feature_row(system: SystemData, scenario: ScenarioData, cfg: dict) -> Dict[str, float | int | str]:
-    H = int(cfg["uc"]["time_horizon"])
-    row: Dict[str, float | int | str] = {
-        "scenario_id": scenario.scenario_id,
-        "system_name": system.name,
-        "n_generators": system.n_generators,
-        "n_buses": system.n_buses,
-        "time_horizon": H,
-        "scenario_seed": scenario.seed,
-    }
-    for t in range(H):
-        row[f"total_demand_t{t}"] = float(scenario.total_demand_mw[t])
-
-    for b_idx, bus in enumerate(system.buses):
-        for t in range(H):
-            row[f"busload_b{bus.bus_id}_t{t}"] = float(scenario.demand_mw[b_idx, t])
-    return row
-
-
-def _commitment_row(result: UCSolveResult, system: SystemData, cfg: dict) -> Dict[str, float | int]:
-    H = int(cfg["uc"]["time_horizon"])
-    row: Dict[str, float | int] = {"scenario_id": result.scenario_id}
-    for g in range(system.n_generators):
-        for t in range(H):
-            key = f"u_g{g}_t{t}"
-            row[key] = int(result.commitment[g, t]) if result.commitment is not None else np.nan
-    return row
-
-
-def _dispatch_row(result: UCSolveResult, system: SystemData, cfg: dict) -> Dict[str, float | int]:
-    H = int(cfg["uc"]["time_horizon"])
-    row: Dict[str, float | int] = {"scenario_id": result.scenario_id}
-    for g in range(system.n_generators):
-        for t in range(H):
-            key = f"p_g{g}_t{t}"
-            row[key] = float(result.dispatch[g, t]) if result.dispatch is not None else np.nan
-    return row
-
-
-def _metadata_row(result: UCSolveResult, system: SystemData, scenario: ScenarioData, cfg: dict) -> Dict[str, float | int | str | bool | None]:
-    return {
-        "scenario_id": result.scenario_id,
-        "system_name": system.name,
-        "n_generators": system.n_generators,
-        "n_buses": system.n_buses,
-        "time_horizon": int(cfg["uc"]["time_horizon"]),
-        "scenario_seed": scenario.seed,
-        "feasible": bool(result.feasible),
-        "solver_status": result.solver_status,
-        "termination_condition": result.termination_condition,
-        "objective_cost": result.objective_cost,
-        "solve_time_sec": result.solve_time_sec,
-        "mip_gap": result.mip_gap,
-        "message": result.message,
-    }
-
-
-def generate_dataset(cfg: dict, project_root: str | Path) -> Path:
-    """Generate a UC dataset by repeatedly solving the classical MILP.
-
-    Returns
-    -------
-    Path
-        Output directory containing CSV/NPY files.
+    Outputs:
+    - features.csv
+    - labels_commitment.csv
+    - dispatch.csv
+    - milp_summary.csv
     """
-    project_root = Path(project_root).resolve()
     seed = int(cfg["project"]["seed"])
-    set_global_seed(seed)
+    set_seed(seed)
+    logger = get_logger("dataset_generation", level=cfg["project"].get("log_level", "INFO"))
 
-    dataset_name = str(cfg["outputs"]["dataset_name"])
-    results_root = _resolve_path(project_root, cfg["paths"]["results_dir"])
-    output_dir = results_root / dataset_name
+    case_name = case_name or cfg["case"]["name"]
+    T = int(cfg["case"]["time_horizon"])
+    reserve_margin = float(cfg["case"]["reserve_margin"])
+    n_scenarios = int(n_scenarios or cfg["dataset"]["n_scenarios"])
 
-    overwrite = bool(cfg["outputs"].get("overwrite", False))
-    if output_dir.exists() and not overwrite:
-        raise FileExistsError(
-            f"Output directory already exists: {output_dir}. Set outputs.overwrite=true to overwrite."
-        )
-    output_dir.mkdir(parents=True, exist_ok=True)
+    case = create_uc_case(case_name=case_name, time_horizon=T, reserve_margin=reserve_margin, seed=seed)
 
-    LOGGER.info("Loading system: %s", cfg["uc"]["case_name"])
-    system = load_system(
-        case_name=str(cfg["uc"]["case_name"]),
-        case_source=str(cfg["uc"].get("case_source", "synthetic")),
-        n_generators=int(cfg["uc"].get("n_generators", 10)),
-        n_buses=int(cfg["uc"].get("n_buses", 5)),
-        base_mva=float(cfg["uc"].get("base_mva", 100.0)),
-        seed=seed,
+    out_dir = project_path(cfg, "data", "processed", case.name)
+    ensure_dir(out_dir)
+
+    case.generators.to_csv(out_dir / "generators.csv", index=False)
+    if case.buses is not None:
+        case.buses.to_csv(out_dir / "buses_reduced.csv", index=False)
+    if case.lines is not None:
+        case.lines.to_csv(out_dir / "lines_reduced.csv", index=False)
+
+    features_df = generate_scenarios(
+        case=case,
+        n_scenarios=n_scenarios,
+        seed=seed + 7,
+        demand_noise_std=float(cfg["dataset"]["demand_noise_std"]),
+        demand_scale_low=float(cfg["dataset"]["demand_scale_low"]),
+        demand_scale_high=float(cfg["dataset"]["demand_scale_high"]),
+        include_renewables=bool(cfg["case"]["include_renewables"]),
+        renewable_penetration=float(cfg["case"]["renewable_penetration"]),
     )
-    _write_system_tables(system, output_dir)
 
-    scenarios = generate_uc_scenarios(system, cfg)
-    LOGGER.info("Generated %d demand scenarios", len(scenarios))
+    label_rows = []
+    dispatch_rows = []
+    summary_rows = []
 
-    feature_rows: List[dict] = []
-    commitment_rows: List[dict] = []
-    dispatch_rows: List[dict] = []
-    metadata_rows: List[dict] = []
+    solver_cfg = cfg["solver"]
 
-    save_lp = bool(cfg["outputs"].get("save_model_lp", False))
-    lp_dir = output_dir / "lp_models"
-    if save_lp:
-        lp_dir.mkdir(exist_ok=True)
+    logger.info("Generating %s scenarios for %s with %s generators and %s hours", n_scenarios, case.name, case.num_generators, T)
 
-    for scenario in scenarios:
-        LOGGER.info("Solving scenario %s/%s", scenario.scenario_id + 1, len(scenarios))
-        feature_rows.append(_scenario_feature_row(system, scenario, cfg))
-        model, result = solve_uc_instance(system, scenario, cfg)
+    for _, row in tqdm(features_df.iterrows(), total=len(features_df), desc=f"Solve {case.name}"):
+        sid = int(row["scenario_id"])
+        demand = extract_net_demand(row, T)
 
-        if save_lp:
-            try:
-                model.write(str(lp_dir / f"scenario_{scenario.scenario_id}.lp"), io_options={"symbolic_solver_labels": True})
-            except Exception as exc:
-                LOGGER.warning("Could not write LP for scenario %s: %s", scenario.scenario_id, exc)
-
-        commitment_rows.append(_commitment_row(result, system, cfg))
-        dispatch_rows.append(_dispatch_row(result, system, cfg))
-        metadata_rows.append(_metadata_row(result, system, scenario, cfg))
-
-        LOGGER.info(
-            "Scenario %s: feasible=%s, status=%s, term=%s, time=%.3fs, obj=%s",
-            scenario.scenario_id,
-            result.feasible,
-            result.solver_status,
-            result.termination_condition,
-            result.solve_time_sec,
-            result.objective_cost,
+        sol = solve_uc_milp(
+            case=case,
+            demand=demand,
+            solver_name=str(solver_cfg["name"]),
+            tee=bool(solver_cfg.get("tee", False)),
+            time_limit=float(solver_cfg.get("time_limit", 120)),
+            mip_gap=float(solver_cfg.get("mip_gap", 0.001)),
+            threads=int(solver_cfg.get("threads", 0)),
         )
 
-    features_df = pd.DataFrame(feature_rows)
-    commitment_df = pd.DataFrame(commitment_rows)
-    dispatch_df = pd.DataFrame(dispatch_rows)
-    metadata_df = pd.DataFrame(metadata_rows)
+        summary_rows.append(
+            {
+                "scenario_id": sid,
+                "case_name": case.name,
+                "num_generators": case.num_generators,
+                "time_horizon": T,
+                "objective": sol["objective"],
+                "solve_time": sol["solve_time"],
+                "gap": sol["gap"],
+                "solver_status": sol["status"],
+                "termination_condition": sol["termination_condition"],
+                "feasible": bool(sol["feasible"]),
+                "error": sol.get("error", ""),
+            }
+        )
 
-    features_df.to_csv(output_dir / "features.csv", index=False)
-    commitment_df.to_csv(output_dir / "labels_commitment.csv", index=False)
-    dispatch_df.to_csv(output_dir / "labels_dispatch.csv", index=False)
-    metadata_df.to_csv(output_dir / "metadata.csv", index=False)
+        if sol["feasible"] and sol["commitment"] is not None:
+            label_rows.append(commitment_to_row(sid, sol["commitment"]))
+            dispatch_rows.append(dispatch_to_row(sid, sol["dispatch"]))
 
-    # Save compact arrays for ML preprocessing. Infeasible rows contain NaN labels.
-    feature_cols = [c for c in features_df.columns if c.startswith("total_demand_") or c.startswith("busload_")]
-    commitment_cols = [c for c in commitment_df.columns if c.startswith("u_g")]
-    dispatch_cols = [c for c in dispatch_df.columns if c.startswith("p_g")]
-    np.save(output_dir / "features.npy", features_df[feature_cols].to_numpy(dtype=float))
-    np.save(output_dir / "labels_commitment.npy", commitment_df[commitment_cols].to_numpy(dtype=float))
-    np.save(output_dir / "labels_dispatch.npy", dispatch_df[dispatch_cols].to_numpy(dtype=float))
+        save_every = int(cfg["dataset"].get("save_every", 25))
+        if save_every > 0 and (sid + 1) % save_every == 0:
+            _write_dataset(out_dir, features_df, label_rows, dispatch_rows, summary_rows)
 
-    feasible_rate = float(metadata_df["feasible"].mean()) if len(metadata_df) else 0.0
-    LOGGER.info("Dataset saved to %s", output_dir)
-    LOGGER.info("Feasible scenario rate: %.2f%%", 100.0 * feasible_rate)
+    _write_dataset(out_dir, features_df, label_rows, dispatch_rows, summary_rows)
+    logger.info("Saved dataset to %s", out_dir)
+    return out_dir
 
-    return output_dir
+
+def _write_dataset(out_dir: Path, features_df: pd.DataFrame, label_rows: list, dispatch_rows: list, summary_rows: list) -> None:
+    features_df.to_csv(out_dir / "features.csv", index=False)
+    pd.DataFrame(label_rows).to_csv(out_dir / "labels_commitment.csv", index=False)
+    pd.DataFrame(dispatch_rows).to_csv(out_dir / "dispatch.csv", index=False)
+    pd.DataFrame(summary_rows).to_csv(out_dir / "milp_summary.csv", index=False)

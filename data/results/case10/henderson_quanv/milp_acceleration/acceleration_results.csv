@@ -1,0 +1,13 @@
+scenario_id,case_name,model_name,mode,solve_time,objective,gap,solver_status,termination_condition,feasible,predicted_schedule_feasible,num_binaries_fixed,pct_binaries_fixed,baseline_full_milp_time,baseline_full_milp_objective,speedup_vs_full_milp,cost_deviation_vs_full_milp
+5,case10,henderson_quanv,full_milp,0.07305985398124903,413538.96198928385,0.0009478073846160361,ok,optimal,True,False,0,0.0,0.07305985398124903,413538.96198928385,1.0,0.0
+5,case10,henderson_quanv,warm_start,0.07009415398351848,413538.96198928385,0.0009478073846160361,ok,optimal,True,False,0,0.0,0.07305985398124903,413538.96198928385,1.0423102331533654,0.0
+5,case10,henderson_quanv,full_fix_feasible,,,,skipped_predicted_schedule_infeasible,skipped,False,False,240,1.0,0.07305985398124903,413538.96198928385,,
+5,case10,henderson_quanv,partial_fix_confident,0.02409132895991206,414085.25928563706,0.0,ok,optimal,True,False,198,0.825,0.07305985398124903,413538.96198928385,3.0326203300291374,0.0013210298099248137
+9,case10,henderson_quanv,full_milp,0.066671843000222,440532.3424137062,0.00017213513308836495,ok,optimal,True,False,0,0.0,0.066671843000222,440532.3424137062,1.0,0.0
+9,case10,henderson_quanv,warm_start,0.06784253899240866,440532.3424137062,0.00017213513308836495,ok,optimal,True,False,0,0.0,0.066671843000222,440532.3424137062,0.982743924246148,0.0
+9,case10,henderson_quanv,full_fix_feasible,,,,skipped_predicted_schedule_infeasible,skipped,False,False,240,1.0,0.066671843000222,440532.3424137062,,
+9,case10,henderson_quanv,partial_fix_confident,0.019731512002181262,,,warning,infeasible,False,False,197,0.8208333333333333,0.066671843000222,440532.3424137062,3.3789525603943384,
+11,case10,henderson_quanv,full_milp,0.0941616459749639,373640.92809730285,0.0009088235871494954,ok,optimal,True,False,0,0.0,0.0941616459749639,373640.92809730285,1.0,0.0
+11,case10,henderson_quanv,warm_start,0.09726425097323954,373640.92809730285,0.0009088235871494954,ok,optimal,True,False,0,0.0,0.0941616459749639,373640.92809730285,0.9681012811261019,0.0
+11,case10,henderson_quanv,full_fix_feasible,,,,skipped_predicted_schedule_infeasible,skipped,False,False,240,1.0,0.0941616459749639,373640.92809730285,,
+11,case10,henderson_quanv,partial_fix_confident,0.019063911982811987,,,warning,infeasible,False,False,203,0.8458333333333333,0.0941616459749639,373640.92809730285,4.939261472664162,

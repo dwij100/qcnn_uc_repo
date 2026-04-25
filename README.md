@@ -1,184 +1,394 @@
-# QCNN-UC Research Pipeline
+# QCNN-Assisted Unit Commitment Research Pipeline
 
-This repository is a modular research pipeline for applying Quantum Convolutional Neural Networks (QCNNs) to the Unit Commitment (UC) problem.
+This repository implements a complete Python pipeline for using classical CNN and quantum/QCNN-style models to predict Unit Commitment (UC) binary schedules, then using those predictions to accelerate MILP solving.
 
-The current version implements **Stage 1: classical MILP dataset generation**. Later stages are scaffolded and will be filled in sequentially:
+The publication idea is:
 
-1. Classical MILP UC dataset generation
-2. ML/QCNN preprocessing
-3. Classical CNN, Henderson-style quanvolution, and trainable PQC/QCNN models
-4. Training and evaluation
-5. UC feasibility checking
-6. QCNN-assisted MILP warm-start and partial fixing
-7. Scalability experiments
+> Train ML/QML models to predict generator on/off decisions from UC scenario features, then use the predicted binaries as warm starts or confidence-based partial fixing inside the MILP. The final MILP preserves feasibility and gives objective-quality comparisons against the full MILP baseline.
 
-## Current working command
+---
 
-From the project root:
-
-```bash
-python main.py generate-data --config config/config.yaml
-```
-
-or:
-
-```bash
-python experiments/run_dataset_generation.py --config config/config.yaml
-```
-
-## Solver setup
-
-The default solver is Gurobi:
-
-```yaml
-solver:
-  name: gurobi
-```
-
-If Gurobi is not available, install HiGHS and set:
-
-```yaml
-solver:
-  name: appsi_highs
-```
-
-For publication-scale experiments, Gurobi is recommended because UC is a mixed-integer optimization problem and repeated dataset generation can become expensive.
-
-## What Stage 1 saves
-
-Dataset outputs are saved under:
-
-```text
-data/results/<dataset_name>/
-```
-
-Files include:
-
-- `features.csv`: scenario-level demand features
-- `features.npy`: compact feature array for ML preprocessing
-- `labels_commitment.csv`: optimal generator on/off schedules
-- `labels_commitment.npy`: compact commitment label array
-- `labels_dispatch.csv`: optimal generator dispatch schedules
-- `labels_dispatch.npy`: compact dispatch label array
-- `metadata.csv`: objective cost, solve time, feasibility status, termination condition, MIP gap
-- `system_generators.csv`: generator parameters used by the UC MILP
-- `system_buses.csv`: bus load parameters
-- `system_branches.csv`: branch parameters
-- `system_notes.txt`: reproducibility notes
-
-## UC formulation currently implemented
-
-The first working MILP formulation includes:
-
-- commitment binaries `u[g,t]`
-- startup binaries `v[g,t]`
-- shutdown binaries `w[g,t]`
-- dispatch variables `p[g,t]`
-- generation upper/lower bounds
-- demand balance
-- startup/shutdown logic
-- ramp-up and ramp-down constraints
-- minimum up/down time constraints
-- reserve margin constraints
-- optional DC network constraints
-
-The cost model is linear in this first version. Quadratic costs can be added later either as MIQP or by piecewise-linearization.
-
-## Synthetic vs IEEE cases
-
-The first version uses synthetic UC cases by default because they are guaranteed to run and include all UC-specific fields.
-
-Example:
-
-```yaml
-uc:
-  case_name: synthetic_10
-  case_source: synthetic
-  n_generators: 10
-  n_buses: 5
-```
-
-For IEEE/MATPOWER-style network data, set:
-
-```yaml
-uc:
-  case_name: case118
-  case_source: pandapower
-```
-
-Important: standard power-flow cases usually do not include full UC parameters such as startup cost, shutdown cost, ramp limits, or minimum up/down time. This repository assigns those missing UC parameters reproducibly for experimentation, and they should be replaced with validated values before final publication claims.
-
-## Project structure
+## 1. Project structure
 
 ```text
 qcnn_uc_project/
+├── config/config.yaml
 ├── data/
 │   ├── raw/
 │   ├── processed/
 │   └── results/
-├── config/
-│   └── config.yaml
 ├── src/
 │   ├── data_generation/
-│   │   ├── load_ieee_case.py
-│   │   ├── uc_milp_model.py
-│   │   ├── generate_scenarios.py
-│   │   └── generate_dataset.py
 │   ├── preprocessing/
-│   │   └── prepare_dataset.py
 │   ├── models/
-│   │   ├── classical_cnn.py
-│   │   ├── henderson_quanv.py
-│   │   ├── trainable_pqc_qcnn.py
-│   │   └── model_utils.py
 │   ├── training/
-│   │   ├── train_model.py
-│   │   └── evaluate_model.py
 │   ├── feasibility/
-│   │   └── check_uc_feasibility.py
 │   ├── milp_acceleration/
-│   │   ├── warm_start_milp.py
-│   │   ├── partial_fixing_milp.py
-│   │   └── compare_speedup.py
 │   ├── plotting/
-│   │   └── plot_results.py
 │   └── utils/
-│       ├── config_loader.py
-│       ├── logging_utils.py
-│       ├── metrics.py
-│       └── seed.py
 ├── experiments/
-│   ├── run_dataset_generation.py
-│   ├── run_training.py
-│   ├── run_feasibility_check.py
-│   ├── run_milp_acceleration.py
-│   └── run_scalability_study.py
 ├── requirements.txt
 ├── README.md
-└── main.py
+└── results_summary_template.md
 ```
 
-## Recommended first run
+---
 
-Use a small test first:
+## 2. Installation
+
+Create and activate an environment, then install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+You also need a working Gurobi installation and license for MILP solving.
+
+Check Gurobi:
+
+```bash
+python -c "import gurobipy as gp; print(gp.gurobi.version())"
+```
+
+---
+
+## 3. UC formulation implemented
+
+The MILP includes:
+
+- generator on/off binaries
+- dispatch variables
+- startup/shutdown variables
+- generation minimum and maximum limits
+- demand balance
+- reserve margin
+- ramp-up/ramp-down constraints
+- startup and shutdown costs
+- no-load cost
+- marginal generation cost
+- minimum up/down time constraints
+- reduced network skeleton files for future PTDF/network extension
+
+Objective:
+
+```text
+min sum_t sum_g (
+    marginal_cost_g * p_g,t
+  + no_load_cost_g * u_g,t
+  + startup_cost_g * startup_g,t
+  + shutdown_cost_g * shutdown_g,t
+)
+```
+
+The current default is a single-bus UC formulation. The `case118_reduced` case keeps a 118-bus-inspired skeleton but does not activate network constraints by default, so large-scale UC experiments remain tractable.
+
+---
+
+## 4. Dataset generation
+
+Run:
+
+```bash
+python experiments/run_dataset_generation.py
+```
+
+Or specify case and sample count:
+
+```bash
+python experiments/run_dataset_generation.py --case case10 --n-scenarios 100
+python experiments/run_dataset_generation.py --case case24 --n-scenarios 60
+python experiments/run_dataset_generation.py --case case118_reduced --n-scenarios 20
+```
+
+Outputs are saved to:
+
+```text
+data/processed/<case_name>/
+├── features.csv
+├── labels_commitment.csv
+├── dispatch.csv
+├── milp_summary.csv
+├── generators.csv
+├── buses_reduced.csv
+└── lines_reduced.csv
+```
+
+---
+
+## 5. Preprocessing
+
+Run:
+
+```bash
+python experiments/run_preprocessing.py --case case10
+```
+
+This creates:
+
+```text
+data/processed/<case_name>/
+├── train.npz
+├── val.npz
+├── test.npz
+├── scaler.joblib
+└── preprocessing_metadata.json
+```
+
+Important: the split is by `scenario_id`, not by random rows, to avoid leakage.
+
+Label tensor shape:
+
+```text
+Y = samples × num_generators × time_horizon
+```
+
+---
+
+## 6. Train models
+
+### Classical CNN
+
+```bash
+python experiments/run_training_cnn.py --case case10
+```
+
+### Henderson-style quanvolution
+
+Fixed random quantum filters:
+
+```bash
+python experiments/run_training_henderson_quanv.py --case case10
+```
+
+Trainable quantum filters:
+
+```bash
+python experiments/run_training_henderson_quanv.py --case case10 --trainable
+```
+
+### Trainable PQC/QCNN
+
+```bash
+python experiments/run_training_pqc_qcnn.py --case case10
+```
+
+Quantum models are slower than the CNN. For development, the config includes:
 
 ```yaml
-uc:
-  case_name: synthetic_10
-  n_generators: 10
-  n_buses: 5
-  time_horizon: 12
-  n_scenarios: 20
-  enable_network_constraints: false
+max_train_samples: 256
+max_val_samples: 128
 ```
 
-Then scale gradually:
+Increase these for final publication experiments.
 
-1. `synthetic_10`, 12-hour horizon
-2. `synthetic_10`, 24-hour horizon
-3. `synthetic_24`, 24-hour horizon
-4. `case118` via pandapower with network constraints enabled
+---
 
-## Next implementation stages
+## 7. Evaluation outputs
 
-The next stage should implement `src/preprocessing/prepare_dataset.py`, then the CNN baseline, then the quantum models. The order is intentional: the ML/QCNN models need stable feature tensors and leakage-safe scenario splits before training.
+For each model:
+
+```text
+data/results/<case_name>/<model_name>/
+├── best_model.pt
+├── history.csv
+├── test_metrics.csv
+├── predictions_test.csv
+├── targets_test.csv
+├── per_generator_accuracy.csv
+└── per_time_accuracy.csv
+```
+
+Metrics include:
+
+- train/validation loss
+- bitwise accuracy
+- per-generator accuracy
+- per-time-step accuracy
+- exact schedule match accuracy
+- F1 score
+- training time
+- prediction time
+
+---
+
+## 8. Feasibility checking
+
+Run:
+
+```bash
+python experiments/run_feasibility_check.py --case case10 --model cnn
+```
+
+Outputs:
+
+```text
+data/results/<case_name>/<model_name>/feasibility/
+├── feasible_predictions.csv
+├── infeasible_predictions.csv
+├── feasibility_summary.csv
+├── feasibility_by_scenario.csv
+└── violation_breakdown.csv
+```
+
+Checks include:
+
+- demand capacity coverage
+- reserve margin
+- minimum generation exceeding demand
+- approximate dispatch feasibility
+- ramp feasibility
+- minimum up/down violations
+
+---
+
+## 9. QCNN-assisted MILP acceleration
+
+Run:
+
+```bash
+python experiments/run_milp_acceleration.py --case case10 --model cnn
+```
+
+Modes compared:
+
+1. full MILP from scratch
+2. MILP with predicted binary warm start
+3. full binary fixing only if predicted schedule is feasible
+4. confidence-based partial fixing
+
+Confidence:
+
+```text
+confidence = abs(probability - 0.5) * 2
+```
+
+For partial fixing:
+
+```text
+fix u_g,t only if confidence_g,t >= confidence_threshold
+```
+
+Outputs:
+
+```text
+data/results/<case_name>/<model_name>/milp_acceleration/
+├── acceleration_results.csv
+└── acceleration_summary.csv
+```
+
+Metrics include:
+
+- solve time
+- objective cost
+- solver gap
+- solver status
+- feasibility status
+- number and percentage of binaries fixed
+- speedup vs full MILP
+- cost deviation vs full MILP
+
+---
+
+## 10. Scalability study
+
+Run:
+
+```bash
+python experiments/run_scalability_study.py --model cnn
+```
+
+This loops through:
+
+- `case10`
+- `case24`
+- `case118_reduced`
+
+Outputs:
+
+```text
+data/results/scalability/
+├── scalability_results.csv
+└── *.png
+```
+
+---
+
+## 11. Run the full pipeline
+
+For quick smoke testing:
+
+```bash
+python experiments/run_all.py --case case10 --n-scenarios 20 --skip-quantum
+```
+
+For a complete run using the configured models:
+
+```bash
+python experiments/run_all.py
+```
+
+---
+
+## 12. Notes for publication experiments
+
+Recommended comparisons:
+
+- CNN vs Henderson fixed quanvolution vs Henderson trainable quanvolution vs trainable PQC/QCNN
+- random quantum filters vs trainable quantum filters
+- different encodings and qubit counts
+- prediction accuracy vs feasibility rate
+- feasibility rate vs confidence threshold
+- full MILP vs warm start vs full fixing vs partial fixing
+- speedup vs objective deviation
+- scalability across 10-generator, 24-generator, and reduced 118-bus-inspired cases
+
+Recommended ablation table:
+
+| Experiment | Metric |
+|---|---|
+| CNN vs QML models | bitwise accuracy, exact schedule accuracy, F1 |
+| Prediction quality vs feasibility | feasibility rate, violation breakdown |
+| MILP acceleration | solve time, speedup, objective deviation |
+| Confidence threshold sweep | fixed binaries %, feasibility, speedup |
+| Scalability | runtime and feasibility trends |
+
+---
+
+## 13. Common issues
+
+### Gurobi unavailable
+
+If dataset generation returns `solver_unavailable`, check that Gurobi is installed and licensed.
+
+### Quantum training too slow
+
+Reduce:
+
+```yaml
+models:
+  henderson_quanv:
+    max_train_samples: 64
+    max_val_samples: 32
+```
+
+Or run only CNN first:
+
+```bash
+python experiments/run_all.py --skip-quantum
+```
+Or run each of the steps manually with
+```bash
+python experiments/run_dataset_generation.py --case case10 --n-scenarios 100
+python experiments/run_preprocessing.py --case case10
+python experiments/run_training_cnn.py --case case10
+python experiments/run_training_henderson_quanv.py --case case10
+python experiments/run_training_henderson_quanv.py --case case10 --trainable
+python experiments/run_training_pqc_qcnn.py --case case10
+python experiments/run_feasibility_check.py --case case10 --model cnn
+python experiments/run_milp_acceleration.py --case case10 --model cnn
+python experiments/run_scalability_study.py --model cnn
+```
+
+### MILP infeasible scenarios
+
+Synthetic demand is scaled to remain below available capacity, but infeasibilities may still appear because of ramping and minimum up/down constraints. These are logged in `milp_summary.csv`, and preprocessing uses feasible solved scenarios only by default.

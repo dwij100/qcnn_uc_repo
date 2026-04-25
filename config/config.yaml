@@ -1,48 +1,116 @@
 project:
   name: qcnn_uc_project
   seed: 42
+  output_root: data
+  device: auto           # auto | cpu | cuda
   log_level: INFO
 
-paths:
-  raw_dir: data/raw
-  processed_dir: data/processed
-  results_dir: data/results
-  logs_dir: logs
-
-uc:
-  # First working cases. Synthetic cases are guaranteed to run without external IEEE files.
-  # Later: set case_name: ieee118_pandapower if pandapower is installed.
-  case_name: synthetic_10
-  case_source: synthetic       # synthetic | pandapower
-  n_generators: 10             # used for synthetic cases
-  n_buses: 5                   # used for synthetic cases
-  time_horizon: 12             # 12 or 24 recommended for first runs
-  base_mva: 100.0
-
-  # UC constraints
-  enable_network_constraints: false
-  enable_reserve: true
+case:
+  name: case10           # case10 | case24 | case118_reduced
+  time_horizon: 24
   reserve_margin: 0.10
-  enable_min_up_down: true
-  enable_ramping: true
-  cost_model: linear           # linear in v1. Keep quadratic costs for future MIQP/linearization.
+  include_renewables: true
+  renewable_penetration: 0.15
+  network_constraints: false
 
-  # Scenario generation
-  n_scenarios: 20
-  demand_scale_low: 0.85
-  demand_scale_high: 1.15
-  bus_load_noise_std: 0.03
-  daily_profile: [0.72, 0.68, 0.65, 0.64, 0.67, 0.76, 0.88, 0.96, 1.02, 1.05, 1.08, 1.10,
-                  1.08, 1.05, 1.02, 1.03, 1.08, 1.16, 1.22, 1.18, 1.08, 0.95, 0.84, 0.76]
+dataset:
+  n_scenarios: 100
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  demand_noise_std: 0.08
+  demand_scale_low: 0.90
+  demand_scale_high: 1.12
+  save_every: 25
+  only_optimal: true
 
 solver:
-  name: gurobi              # gurobi | appsi_highs | cbc | glpk
+  name: gurobi
   tee: false
-  time_limit_sec: 120
+  time_limit: 120
   mip_gap: 0.001
-  threads: 0                # 0 means solver default when supported
+  threads: 0              # 0 lets Gurobi decide
+  feasibility_tol: 1.0e-6
 
-outputs:
-  dataset_name: uc_synthetic10_12h_v1
-  overwrite: true
-  save_model_lp: false
+preprocessing:
+  scaler: standard
+  processed_subdir: processed
+  drop_non_numeric_features: true
+
+training:
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  patience: 8
+  threshold: 0.50
+  num_workers: 0
+  pin_memory: false
+  use_amp: false
+
+models:
+  cnn:
+    hidden_dim: 256
+    conv_channels: [32, 64, 64]
+    dropout: 0.20
+
+  henderson_quanv:
+    enabled: true
+    n_qubits: 4
+    n_filters: 4
+    quantum_layers: 1
+    patch_size: 4
+    stride: 2
+    trainable_filters: false
+    backend: default.qubit
+    max_train_samples: 256      # keep quantum experiments small during testing
+    max_val_samples: 128
+
+  henderson_quanv_trainable:
+    enabled: true
+    n_qubits: 4
+    n_filters: 4
+    quantum_layers: 2
+    patch_size: 4
+    stride: 2
+    trainable_filters: true
+    backend: default.qubit
+    max_train_samples: 256
+    max_val_samples: 128
+
+  pqc_qcnn:
+    enabled: true
+    n_qubits: 6
+    quantum_layers: 3
+    data_reuploading: true
+    backend: default.qubit
+    classical_hidden_dim: 128
+    max_train_samples: 256
+    max_val_samples: 128
+
+feasibility:
+  threshold: 0.50
+  partial_feasible_capacity_ratio: 0.95
+
+milp_acceleration:
+  max_scenarios: 25
+  confidence_threshold: 0.85
+  full_fix_only_if_feasible: true
+  warm_start: true
+  compare_modes:
+    - full_milp
+    - warm_start
+    - full_fix_feasible
+    - partial_fix_confident
+
+scalability:
+  cases:
+    - case10
+    - case24
+    - case118_reduced
+  n_scenarios:
+    case10: 100
+    case24: 60
+    case118_reduced: 20
+  train_epochs_small: 10
+  max_milp_scenarios: 10
