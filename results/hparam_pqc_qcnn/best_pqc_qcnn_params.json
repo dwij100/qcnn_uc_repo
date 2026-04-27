@@ -1,0 +1,12 @@
+{
+  "n_qubits": 10,
+  "quantum_layers": 1,
+  "data_reuploading": false,
+  "classical_hidden_dim": 128,
+  "dropout": 0.20143545987653155,
+  "lr": 0.0017779044627728128,
+  "weight_decay": 3.4459121784074e-06,
+  "batch_size": 8,
+  "use_cnn_head": true,
+  "conv_channels_key": "32_64_64"
+}

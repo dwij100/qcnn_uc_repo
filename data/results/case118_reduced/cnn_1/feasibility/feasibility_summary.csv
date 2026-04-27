@@ -1,2 +1,2 @@
 case_name,model_name,n_scenarios,feasibility_rate,partial_feasibility_rate,threshold
-case118_reduced,cnn,26,0.0,0.0,0.5
+case118_reduced,cnn,26,0.0,0.19230769230769232,0.5

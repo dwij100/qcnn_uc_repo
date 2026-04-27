@@ -200,7 +200,7 @@ class HendersonQuanvNet(nn.Module):
         conv_kernel_size: int = 5,
         fc_hidden_dim: Optional[int] = None,
         max_lut_qubits: int = 12,
-        use_conv_head: bool = True,
+        use_conv_head: bool = False#True,
     ) -> None:
         super().__init__()
 

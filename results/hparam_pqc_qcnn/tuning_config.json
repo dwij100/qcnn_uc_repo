@@ -1,0 +1,11 @@
+{
+  "num_generators": 54,
+  "time_horizon": 24,
+  "epochs": 30,
+  "final_epochs": 50,
+  "backend": "default.qubit",
+  "device": "cpu",
+  "grad_clip": 1.0,
+  "early_stopping_patience": 5,
+  "verbose": false
+}
