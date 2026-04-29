@@ -1,6 +1,5 @@
 violation_type,count
+min_up,3
 reserve,3
 demand_capacity,2
-min_down,2
-min_up,2
 ramp,2

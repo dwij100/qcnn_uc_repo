@@ -1,4 +1,4 @@
 scenario_id,model_name,fully_feasible,partially_feasible,demand_coverage_ok,reserve_ok,min_generation_ok,ramp_ok,min_up_ok,min_down_ok,capacity_ratio_min,violation_types
-5,cnn,False,False,False,False,True,False,False,False,0.8438889978353074,demand_capacity;min_down;min_up;ramp;reserve
-9,cnn,False,False,False,False,True,False,False,False,0.8046207660348508,demand_capacity;min_down;min_up;ramp;reserve
-11,cnn,False,False,True,False,True,True,False,False,0.9102933419910001,min_down;min_up;reserve
+5,cnn,False,False,False,False,True,False,False,False,0.8546332775930131,demand_capacity;min_down;min_up;ramp;reserve
+9,cnn,False,False,False,False,True,False,True,True,0.8046207660348508,demand_capacity;ramp;reserve
+11,cnn,False,False,False,False,True,False,True,True,0.8770599593341013,demand_capacity;ramp;reserve
