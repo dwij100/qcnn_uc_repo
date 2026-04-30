@@ -3,35 +3,85 @@ from __future__ import annotations
 from typing import Dict
 
 import numpy as np
-from sklearn.metrics import f1_score
-
+# from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def sigmoid_np(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 
 def binary_metrics(y_true: np.ndarray, probs: np.ndarray, threshold: float = 0.5) -> Dict[str, float]:
-    """Compute publication-friendly multilabel UC commitment metrics.
-
-    y_true and probs can be shaped [N, G, T] or [N, G*T].
     """
+    Compute UC binary commitment prediction metrics.
+
+    Parameters
+    ----------
+    y_true:
+        Ground-truth commitment labels.
+        Shape: [samples, num_generators, time_horizon]
+
+    y_prob:
+        Predicted probabilities from the model.
+        Shape: [samples, num_generators, time_horizon]
+
+    threshold:
+        Probability threshold used to convert probabilities to binary predictions.
+
+    Returns
+    -------
+    dict
+        Dictionary containing accuracy, precision, recall, and F1 metrics.
+    """
+
     y_true = np.asarray(y_true).astype(int)
-    probs = np.asarray(probs)
-    y_pred = (probs >= threshold).astype(int)
+    y_prob = np.asarray(y_prob).astype(float)
 
-    yt_flat = y_true.reshape(y_true.shape[0], -1)
-    yp_flat = y_pred.reshape(y_pred.shape[0], -1)
+    if y_true.shape != y_prob.shape:
+        raise ValueError(f"Shape mismatch: y_true {y_true.shape}, y_prob {y_prob.shape}")
 
-    bitwise_acc = float((yt_flat == yp_flat).mean())
-    exact_match = float(np.all(yt_flat == yp_flat, axis=1).mean())
-    f1_micro = float(f1_score(yt_flat.ravel(), yp_flat.ravel(), average="micro", zero_division=0))
-    f1_macro = float(f1_score(yt_flat.ravel(), yp_flat.ravel(), average="macro", zero_division=0))
+    y_pred = (y_prob >= threshold).astype(int)
+
+    y_true_flat = y_true.reshape(-1)
+    y_pred_flat = y_pred.reshape(-1)
 
     return {
-        "bitwise_accuracy": bitwise_acc,
-        "exact_schedule_match_accuracy": exact_match,
-        "f1_micro": f1_micro,
-        "f1_macro": f1_macro,
+        "threshold": threshold,
+
+        # Overall bitwise accuracy
+        "bitwise_accuracy": accuracy_score(y_true_flat, y_pred_flat),
+
+        # Metrics for predicting generator ON
+        "precision_on": precision_score(
+            y_true_flat, y_pred_flat, pos_label=1, zero_division=0
+        ),
+        "recall_on": recall_score(
+            y_true_flat, y_pred_flat, pos_label=1, zero_division=0
+        ),
+        "f1_on": f1_score(
+            y_true_flat, y_pred_flat, pos_label=1, zero_division=0
+        ),
+
+        # Metrics for predicting generator OFF
+        "precision_off": precision_score(
+            y_true_flat, y_pred_flat, pos_label=0, zero_division=0
+        ),
+        "recall_off": recall_score(
+            y_true_flat, y_pred_flat, pos_label=0, zero_division=0
+        ),
+        "f1_off": f1_score(
+            y_true_flat, y_pred_flat, pos_label=0, zero_division=0
+        ),
+
+        # Balanced single-number versions
+        "macro_precision": precision_score(
+            y_true_flat, y_pred_flat, average="macro", zero_division=0
+        ),
+        "macro_recall": recall_score(
+            y_true_flat, y_pred_flat, average="macro", zero_division=0
+        ),
+        "macro_f1": f1_score(
+            y_true_flat, y_pred_flat, average="macro", zero_division=0
+        ),
     }
 
 

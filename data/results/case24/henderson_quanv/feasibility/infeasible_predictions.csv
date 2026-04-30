@@ -1,0 +1,16 @@
+scenario_id,model_name,fully_feasible,partially_feasible,demand_coverage_ok,reserve_ok,min_generation_ok,ramp_ok,min_up_ok,min_down_ok,capacity_ratio_min,violation_types
+15,henderson_quanv,False,True,False,False,True,False,False,True,0.8729160465668895,demand_capacity;min_up;ramp;reserve
+18,henderson_quanv,False,True,False,False,True,False,False,True,0.8673204330294669,demand_capacity;min_up;ramp;reserve
+22,henderson_quanv,False,True,True,False,True,False,False,True,0.9807791346043709,min_up;ramp;reserve
+26,henderson_quanv,False,True,False,False,True,False,True,True,0.9071387378821164,demand_capacity;ramp;reserve
+30,henderson_quanv,False,True,True,False,True,False,True,False,0.9355112544223353,min_down;ramp;reserve
+31,henderson_quanv,False,True,False,False,True,False,False,True,0.8273638729324673,demand_capacity;min_up;ramp;reserve
+39,henderson_quanv,False,True,True,True,True,False,True,False,1.00360285776906,min_down;ramp
+40,henderson_quanv,False,True,True,False,True,False,True,False,0.9718417869413201,min_down;ramp;reserve
+70,henderson_quanv,False,True,True,False,True,False,True,True,0.9303780954261489,ramp;reserve
+73,henderson_quanv,False,True,True,False,True,False,False,False,0.9158306506453314,min_down;min_up;ramp;reserve
+76,henderson_quanv,False,True,False,False,True,False,True,True,0.8737766822399969,demand_capacity;ramp;reserve
+77,henderson_quanv,False,True,True,False,True,False,True,False,0.942439212720117,min_down;ramp;reserve
+80,henderson_quanv,False,True,True,True,True,False,True,False,1.007741554021047,min_down;ramp
+83,henderson_quanv,False,True,False,False,True,False,True,True,0.8867478790735223,demand_capacity;ramp;reserve
+96,henderson_quanv,False,True,False,False,True,False,False,True,0.8534223772651447,demand_capacity;min_up;ramp;reserve

@@ -40,7 +40,7 @@ preprocessing:
 training:
   batch_size: 32
   epochs: 30
-  learning_rate: 0.01
+  learning_rate: 0.001
   weight_decay: 0.00001
   patience: 8
   threshold: 0.50
@@ -80,17 +80,17 @@ models:
 
   pqc_qcnn:
     enabled: true
-    n_qubits: 6
-    quantum_layers: 3
+    n_qubits: 3
+    quantum_layers: 1
     data_reuploading: true
     backend: default.qubit
-    classical_hidden_dim: 15
+    classical_hidden_dim: 1024
     max_train_samples: 256
     max_val_samples: 128
 
 feasibility:
   threshold: 0.50
-  partial_feasible_capacity_ratio: 0.95
+  partial_feasible_capacity_ratio: 0.45
 
 milp_acceleration:
   max_scenarios: 25

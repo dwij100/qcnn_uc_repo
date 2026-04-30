@@ -37,8 +37,8 @@ class TrainablePQCQCNN(nn.Module):
         backend: str = "default.qubit",
         classical_hidden_dim: int = 15,
         dropout: float = 0.15,
-        conv_channels: list[int] | tuple[int, ...] = 4,#(10, 20),
-        use_cnn_head: bool = False,#True,
+        conv_channels: list[int] | tuple[int, ...] = 128,#(10, 20),
+        use_cnn_head: bool = True,
         conv_ansatz: str = "c9",
         shared_conv_params: bool = False,
     ) -> None:

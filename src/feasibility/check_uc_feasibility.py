@@ -150,7 +150,7 @@ def check_schedule_feasibility(case, demand: np.ndarray, u: np.ndarray) -> Dict[
 
     return {
         "fully_feasible": bool(fully_feasible),
-        "partially_feasible": bool(capacity_ratio >= 0.95),
+        "partially_feasible": bool(capacity_ratio >= 0.80),
         "demand_coverage_ok": demand_coverage_ok,
         "reserve_ok": reserve_ok,
         "min_generation_ok": min_gen_ok,

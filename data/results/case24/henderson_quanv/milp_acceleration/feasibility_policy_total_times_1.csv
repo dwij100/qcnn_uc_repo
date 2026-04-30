@@ -1,0 +1,2 @@
+case_name,model_name,n_scenarios,baseline_total_full_milp_time,policy_total_solver_time,policy_total_feasibility_check_time,policy_total_time,normalized_policy_time_vs_full_milp,total_speedup_vs_full_milp,time_reduction_percent,n_partial_fix,n_fallback_full_milp,partial_fix_rate,fallback_full_milp_rate,baseline_feasible_rate,policy_feasible_rate,confidence_threshold,threshold
+case24,henderson_quanv,15,3.617324963,1.006474275,0.02023765,1.026711925,0.383831819,3.523213156,71.61681807,15,0,1,0,1,0.866666667,0.85,0.5

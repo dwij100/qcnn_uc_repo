@@ -1,0 +1,6 @@
+violation_type,count
+ramp,15
+reserve,13
+demand_capacity,7
+min_up,6
+min_down,6

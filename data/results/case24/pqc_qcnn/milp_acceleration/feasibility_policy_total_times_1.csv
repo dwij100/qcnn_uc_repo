@@ -1,0 +1,2 @@
+case_name,model_name,n_scenarios,baseline_total_full_milp_time,policy_total_solver_time,policy_total_feasibility_check_time,policy_total_time,normalized_policy_time_vs_full_milp,total_speedup_vs_full_milp,time_reduction_percent,n_partial_fix,n_fallback_full_milp,partial_fix_rate,fallback_full_milp_rate,baseline_feasible_rate,policy_feasible_rate,confidence_threshold,threshold
+case24,pqc_qcnn,15,3.639442509,0.887972322,0.020629959,0.908602281,0.349654248,4.0055397,75.03457524,15,0,1,0,1,0.933333333,0.85,0.5

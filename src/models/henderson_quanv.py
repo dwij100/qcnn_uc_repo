@@ -194,7 +194,7 @@ class HendersonQuanvNet(nn.Module):
         seed: int = 123,
         normalize_decode: bool = True,
         lut_cache_path: Optional[str] = "cache/henderson_quanv_lut.pt",
-        conv_channels: list[int] | tuple[int, ...] = (32, 64, 64),
+        conv_channels: list[int] | tuple[int, ...] = (2,2,4),#(32, 64, 64),
         conv1_filters: int = 50,
         conv2_filters: int = 64,
         conv_kernel_size: int = 5,

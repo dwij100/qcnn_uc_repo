@@ -1,0 +1,2 @@
+bitwise_accuracy,exact_schedule_match_accuracy,f1_micro,f1_macro,model_name,case_name,training_time,prediction_time_total,prediction_time_per_sample,best_epoch,best_val_loss,num_parameters
+0.940625,0.0,0.940625,0.9397228574943836,cnn,case24,0.743808847037144,0.0007315910188481,4.877273458987474e-05,30,0.442116916179657,17976

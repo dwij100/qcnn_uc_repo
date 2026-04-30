@@ -1,0 +1,16 @@
+scenario_id,model_name,fully_feasible,partially_feasible,demand_coverage_ok,reserve_ok,min_generation_ok,ramp_ok,min_up_ok,min_down_ok,capacity_ratio_min,violation_types
+15,pqc_qcnn,False,True,True,False,True,False,True,True,0.9476818457754619,ramp;reserve
+18,pqc_qcnn,False,True,True,False,True,False,True,False,0.9240900872380173,min_down;ramp;reserve
+22,pqc_qcnn,False,True,True,False,True,False,True,True,0.924137575090654,ramp;reserve
+26,pqc_qcnn,False,True,True,False,True,False,False,True,0.936894406388016,min_up;ramp;reserve
+30,pqc_qcnn,False,True,False,False,True,False,True,True,0.8937347251792904,demand_capacity;ramp;reserve
+31,pqc_qcnn,False,True,False,False,True,False,True,True,0.8961864343943442,demand_capacity;ramp;reserve
+39,pqc_qcnn,False,True,True,False,True,False,True,True,0.9544772531022316,ramp;reserve
+40,pqc_qcnn,False,True,True,False,True,False,True,True,0.9592143266072303,ramp;reserve
+70,pqc_qcnn,False,True,False,False,True,False,True,True,0.9033896346070107,demand_capacity;ramp;reserve
+73,pqc_qcnn,False,True,True,False,True,False,True,True,0.9158306506453314,ramp;reserve
+76,pqc_qcnn,False,True,False,False,True,False,False,False,0.8737766822399969,demand_capacity;min_down;min_up;ramp;reserve
+77,pqc_qcnn,False,True,False,False,True,False,True,True,0.8845423161322423,demand_capacity;ramp;reserve
+80,pqc_qcnn,False,True,True,False,True,False,True,True,0.9130336835755547,ramp;reserve
+83,pqc_qcnn,False,True,False,False,True,False,False,False,0.8867478790735223,demand_capacity;min_down;min_up;ramp;reserve
+96,pqc_qcnn,False,True,False,False,True,False,True,True,0.8534223772651447,demand_capacity;ramp;reserve

@@ -1,0 +1,2 @@
+bitwise_accuracy,exact_schedule_match_accuracy,f1_micro,f1_macro,model_name,case_name,training_time,prediction_time_total,prediction_time_per_sample,best_epoch,best_val_loss,num_parameters
+0.9408564814814815,0.0,0.9408564814814815,0.9400354316083537,henderson_quanv,case24,0.6617615729337558,0.0007266940083354712,4.844626722236474e-05,28,0.1579633355140686,105664
